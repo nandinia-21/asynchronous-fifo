@@ -29,13 +29,9 @@ module async_fifo_tb;
     initial rd_clk = 0;
     always #13 rd_clk = ~rd_clk;
 
-    // BUGGY ON PURPOSE: driving on posedge, the same edge the DUT flops
-    // sample on. This is the race condition that caused the original
-    // idx=0 read mismatch. Kept here only to reproduce that error for
-    // documentation - the fixed version drives on negedge instead.
     task w_write(input [DATA_WIDTH-1:0] data);
         begin
-            @(posedge wr_clk);
+            @(negedge wr_clk);
             wdata = data;
             if (!full) begin
                 wr_en = 1;
@@ -45,30 +41,27 @@ module async_fifo_tb;
                 wr_en = 0;
                 $display("[%0t] wr: skipped, FIFO full (expected)", $time);
             end
-            @(posedge wr_clk);
+            @(negedge wr_clk);
             wr_en = 0;
         end
     endtask
 
     task r_read;
         begin
-            @(posedge rd_clk);
+            @(negedge rd_clk);
             if (!empty) begin
                 rd_en = 1;
-                #1;
-            end else begin
-                rd_en = 0;
-                $display("[%0t] rd: skipped, FIFO empty (expected)", $time);
-            end
-            @(posedge rd_clk);
-            if (rd_en) begin
                 if (rdata !== ref_q[ref_head]) begin
                     $display("[%0t] ERROR: read mismatch. got=%0h expected=%0h (idx=%0d)",
                               $time, rdata, ref_q[ref_head], ref_head);
                     errors = errors + 1;
                 end
                 ref_head = ref_head + 1;
+            end else begin
+                rd_en = 0;
+                $display("[%0t] rd: skipped, FIFO empty (expected)", $time);
             end
+            @(negedge rd_clk);
             rd_en = 0;
         end
     endtask
@@ -119,7 +112,7 @@ module async_fifo_tb;
                     if (($random(seed) % 4) != 0)
                         w_write($random(seed) & 8'hFF);
                     else
-                        @(posedge wr_clk);
+                        @(negedge wr_clk);
                 end
             end
             begin : rd_proc
@@ -127,7 +120,7 @@ module async_fifo_tb;
                     if (($random(seed) % 4) != 0)
                         r_read();
                     else
-                        @(posedge rd_clk);
+                        @(negedge rd_clk);
                 end
             end
         join
